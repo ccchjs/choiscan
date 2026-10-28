@@ -6,6 +6,7 @@ function toast(t) {
   const e = $('#toast'); e.textContent = t; e.classList.add('on');
   clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), 2800);
 }
+addEventListener('error', e => toast('Error: ' + e.message));
 function show(n) {
   for (const k in V) V[k].hidden = k !== n;
   n === 'cam' ? startCam() : n === 'qrs' ? startQR() : stopCam();
