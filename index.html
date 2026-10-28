@@ -12,6 +12,7 @@
 <script defer src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script defer src="./app.js"></script>
 </head>
 <body>
@@ -21,7 +22,25 @@
     <h2>Anong gagamitin mo?</h2>
     <button id="goSolo" class="btn big">Mag-scan dito mismo</button>
     <button id="goPC" class="btn big ghost">PC mode: tumanggap ng scan mula sa phone</button>
-    <p class="hint">Sa phone, i-scan ang QR na lalabas sa PC mode para magkonekta.</p>
+    <button id="goQR" class="btn big ghost">I-scan ang QR code</button>
+    <p class="hint">Sa phone, pindutin ang "I-scan ang QR code" at ituro sa QR na lalabas sa PC mode para magkonekta.</p>
+  </section>
+
+  <section id="qrs" hidden>
+    <video id="qv" autoplay playsinline muted></video>
+    <p id="qmsg" class="hint">Ituro ang camera sa QR code.</p>
+    <div id="qres" hidden>
+      <p id="qtext" class="link"></p>
+      <div class="bar">
+        <button id="qcopy" class="btn ghost">Kopyahin</button>
+        <a id="qopen" class="btn" target="_blank" rel="noopener" hidden>Buksan ang link</a>
+        <button id="qagain" class="btn ghost">Scan ulit</button>
+      </div>
+    </div>
+    <div class="bar">
+      <button id="qback" class="btn ghost">Balik</button>
+      <label class="btn ghost">Mula sa larawan<input id="qfile" type="file" accept="image/*" hidden></label>
+    </div>
   </section>
 
   <section id="pc" hidden>
