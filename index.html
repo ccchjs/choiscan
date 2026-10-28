@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="fil">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scanner</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#14213d">
+<link rel="icon" href="./icon.svg">
+<link rel="stylesheet" href="./style.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script defer src="./app.js"></script>
+</head>
+<body>
+<header><h1>Scanner</h1><span id="count"></span></header>
+<main>
+  <section id="home" hidden>
+    <h2>Anong gagamitin mo?</h2>
+    <button id="goSolo" class="btn big">Mag-scan dito mismo</button>
+    <button id="goPC" class="btn big ghost">PC mode: tumanggap ng scan mula sa phone</button>
+    <p class="hint">Sa phone, i-scan ang QR na lalabas sa PC mode para magkonekta.</p>
+  </section>
+
+  <section id="pc" hidden>
+    <div class="pcbox">
+      <div id="qr"></div>
+      <div>
+        <p id="pstatus">Nagkokonekta...</p>
+        <p class="hint">I-scan ang QR gamit ang camera ng phone, o buksan ang link na ito sa phone:</p>
+        <p id="plink" class="link"></p>
+      </div>
+    </div>
+    <h3>Mga dumating na scan</h3>
+    <p id="pempty" class="hint">Wala pa. Kumuha ng litrato sa phone. I-click ang scan dito para i-edit.</p>
+    <div id="inbox"></div>
+    <div class="bar">
+      <label class="btn ghost">Upload sa PC<input id="pfile" type="file" accept="image/*" multiple hidden></label>
+      <button id="pback" class="btn ghost">Balik</button>
+    </div>
+  </section>
+
+  <section id="cam" hidden>
+    <p id="pstat" class="hint" hidden></p>
+    <button id="preconn" class="btn ghost" hidden>Ikonekta ulit</button>
+    <video id="video" autoplay playsinline muted></video>
+    <div class="bar">
+      <label class="btn ghost">Upload<input id="file" type="file" accept="image/*" hidden></label>
+      <button id="shot" class="shutter" aria-label="Kuhanan ang litrato"></button>
+      <label class="btn ghost">Phone camera<input id="file2" type="file" accept="image/*" capture="environment" hidden></label>
+    </div>
+  </section>
+
+  <section id="crop" hidden>
+    <canvas id="cc"></canvas>
+    <p class="hint">I-drag ang apat na sulok papunta sa gilid ng papel.</p>
+    <div class="bar">
+      <button id="retake" class="btn ghost">Ulitin</button>
+      <button id="apply" class="btn">I-crop</button>
+    </div>
+  </section>
+
+  <section id="edit" hidden>
+    <canvas id="ec"></canvas>
+    <div class="modes">
+      <button data-m="magic">Magic Color</button>
+      <button data-m="gray">Grayscale</button>
+      <button data-m="bw">B&amp;W</button>
+      <button data-m="original">Original</button>
+    </div>
+  </section>
+</main>
+
+<footer id="tray">
+  <div id="thumbs"></div>
+  <div class="bar" id="editbar" hidden>
+    <button id="back" class="btn ghost">Balik</button>
+    <button id="rotl" class="btn ghost" aria-label="I-rotate pakaliwa">&#8634;</button>
+    <button id="rotr" class="btn ghost" aria-label="I-rotate pakanan">&#8635;</button>
+    <button id="add" class="btn">+ Dagdag na page</button>
+  </div>
+  <div class="exports">
+    <button data-x="pdf" disabled>PDF</button>
+    <button data-x="docx" disabled>Word</button>
+    <button data-x="png" disabled>PNG</button>
+    <button data-x="jpg" disabled>JPG</button>
+  </div>
+  <p class="note">PDF at Word: isang file lahat ng page. PNG at JPG: isa-isa kada page.</p>
+</footer>
+<div id="toast" role="status"></div>
+</body>
+</html>
