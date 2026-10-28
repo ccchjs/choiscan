@@ -370,7 +370,7 @@ async function toPDF() {
     const r = Math.min(W / p.c.width, H / p.c.height), w = p.c.width * r, h = p.c.height * r;
     doc.addImage(p.c.toDataURL('image/jpeg', .92), 'JPEG', (W - w) / 2, (H - h) / 2, w, h);
   });
-  doc.save('scan.pdf');
+  doc.save('choi_scan.pdf');
 }
 async function toDocx() {
   if (!window.docx) return toast('Word library not loaded yet. Internet is needed on first use.');
@@ -381,12 +381,12 @@ async function toDocx() {
     if (h > 900) { w = Math.round(w * 900 / h); h = 900; }
     kids.push(new Paragraph({ children: [new ImageRun({ data: await b.arrayBuffer(), transformation: { width: w, height: h } })] }));
   }
-  download(await Packer.toBlob(new Document({ sections: [{ children: kids }] })), 'scan.docx');
+  download(await Packer.toBlob(new Document({ sections: [{ children: kids }] })), 'choi_scan.docx');
 }
 async function toImages(type, ext) {
   const L = list();
   for (let i = 0; i < L.length; i++) {
-    download(await blobP(L[i].c, type, .92), 'scan-' + (i + 1) + '.' + ext);
+    download(await blobP(L[i].c, type, .92), 'choi_scan' + (L.length > 1 ? '_' + (i + 1) : '') + '.' + ext);
     await new Promise(r => setTimeout(r, 350));
   }
 }
