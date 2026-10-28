@@ -18,10 +18,7 @@ video{width:100%;object-fit:contain}
 .modes button.on{background:var(--ac);border-color:var(--ac);color:#fff}
 .shutter{width:68px;height:68px;border-radius:50%;border:4px solid var(--ink);background:#fff;box-shadow:inset 0 0 0 5px var(--ac);cursor:pointer}
 button:focus-visible,label:focus-within{outline:3px solid var(--ac);outline-offset:2px}
-#tray{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);padding:8px 12px;display:flex;flex-direction:column;gap:8px;align-items:center}
-#thumbs{display:flex;gap:8px;overflow-x:auto;max-width:100%;min-height:8px;align-items:center;padding-top:6px}
 .th{position:relative;flex:none}
-.th canvas{height:56px;width:auto;border:1px solid var(--line);border-radius:4px;display:block}
 .th button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:0;background:#c0262d;color:#fff;font-size:13px;line-height:1;cursor:pointer;padding:0}
 .exports{display:flex;gap:8px}
 .exports button:disabled{opacity:.4;cursor:not-allowed}
@@ -40,10 +37,58 @@ h2,h3{margin:8px 0 0;font-weight:600}
 #inbox{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;width:100%}
 .th.big img{width:100%;height:170px;object-fit:cover;border:1px solid var(--line);border-radius:6px;display:block;cursor:pointer;background:#fff}
 .th.big button{top:-7px;right:-7px}
-.phone #tray,.phone #count{display:none}
+.phone #dock,.phone #count{display:none}
 
 [hidden]{display:none!important}
 a.btn{text-decoration:none;display:inline-block}
 #qres{width:100%;text-align:center;background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px}
 
 #ver{font-size:11px;font-weight:400;opacity:.6;margin-left:6px}
+
+/* ---------- Mga page: sa PHONE nasa baba, nakahelera; sa DESKTOP nasa kaliwa, pababa ---------- */
+#dock{position:sticky;bottom:0;z-index:5;background:#fff;border-top:1px solid var(--line);display:flex;flex-direction:column}
+#side{padding:0 12px}
+.sidehead,#sideempty{display:none}
+#thumbs{display:flex;gap:12px;overflow-x:auto;overflow-y:hidden;max-width:100%;min-height:8px;align-items:center;padding:10px 6px 4px}
+#tray{padding:8px 12px;display:flex;flex-direction:column;gap:8px;align-items:center}
+.th{position:relative;flex:none}
+.th canvas{height:60px;width:auto;border:1px solid var(--line);border-radius:4px;display:block;background:#fff}
+.th .num{position:absolute;left:-6px;top:-7px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--ac);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;z-index:1;pointer-events:none}
+.th .mvs{position:absolute;left:0;right:0;bottom:3px;display:flex;justify-content:space-between;padding:0 3px;pointer-events:none}
+.th .mvs button{position:static;pointer-events:auto;width:22px;height:22px;border-radius:50%;border:0;background:rgba(20,33,61,.88);color:#fff;font-size:10px;line-height:22px;padding:0;cursor:pointer}
+.th .mvs button:disabled{opacity:.25;cursor:default}
+.th.dragging{opacity:.35}
+.th.over canvas{outline:3px dashed var(--ac);outline-offset:2px}
+.btn.small{padding:4px 10px;font-size:13px;border-radius:6px}
+
+/* Adjust bar (Magic Color, Grayscale, B&W) */
+.adj{width:100%;max-width:420px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 12px;display:flex;flex-direction:column;gap:4px}
+.adjtop{display:flex;justify-content:space-between;align-items:center;font-weight:600}
+.adjtop output{display:inline-block;min-width:2.2ch;text-align:right;margin-right:6px}
+.adj input[type=range]{width:100%;margin:4px 0;accent-color:var(--ac);height:28px}
+.adjends{display:flex;justify-content:space-between;font-size:12px;opacity:.6}
+
+/* Camera error / fallback */
+.camfix{width:100%;max-width:520px;text-align:center;background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:10px;align-items:center}
+
+@media (min-width:900px){
+  body{display:grid;grid-template-columns:230px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;height:100dvh;overflow:hidden}
+  header{grid-column:1/-1}
+  main{grid-column:2;grid-row:2;overflow-y:auto;align-items:flex-start}
+  #dock{display:contents}
+  #side{grid-column:1;grid-row:2/4;overflow-y:auto;background:#fff;border-right:1px solid var(--line);padding:12px}
+  .sidehead{display:flex;justify-content:space-between;align-items:center}
+  #sideempty{display:block;margin-top:8px}
+  #thumbs{flex-direction:column;align-items:stretch;overflow:visible;gap:16px;padding:14px 6px}
+  .th canvas{width:100%;height:auto}
+  .th .mvs{left:auto;right:6px;bottom:6px;flex-direction:column;gap:4px;justify-content:flex-end}
+  .th .mvs .prev{transform:rotate(90deg)}
+  .th .mvs .next{transform:rotate(90deg)}
+  #tray{grid-column:2;grid-row:3;background:#fff;border-top:1px solid var(--line)}
+  #ec{max-height:58vh}
+  .phone main{grid-column:1/-1}
+  #toast{bottom:150px}
+}
+
+#credit{margin:0;padding:6px 12px;text-align:center;font-size:12px;color:var(--ink);background:#fff;border-top:1px solid var(--line)}
+@media (min-width:900px){#credit{grid-column:1/-1;grid-row:4}}
