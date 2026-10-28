@@ -481,22 +481,34 @@ function startPhone(id) {
   document.body.classList.add('phone');
   $('#pstat').hidden = false; show('cam'); connectPhone();
 }
-function connectPhone() {
+let connSeq = 0, connTimer = 0;
+async function connectPhone() {
+  const my = ++connSeq; clearTimeout(connTimer);
   if (typeof Peer === 'undefined') return setPstat('PeerJS failed to load. Internet is required.', true);
   if (peer) peer.destroy();
   setPstat('Connecting to PC...');
+  // Camera permission first: it lets the browser use the real local address, which helps same-Wi-Fi links.
+  try { await Promise.race([ensureStream().catch(() => {}), new Promise(r => setTimeout(r, 4000))]); } catch (e) {}
+  if (my !== connSeq) return;
+  const fail = t => { if (my === connSeq) setPstat(t, true); };
+  const giveUp = () => fail("Can't reach the PC. Make sure PC mode is open on the computer, then tap Reconnect. Same Wi-Fi works best.");
+  connTimer = setTimeout(() => { if (!conn || !conn.open) giveUp(); }, 20000);
   peer = new Peer({ config: ICE });
   peer.on('open', () => {
+    if (my !== connSeq) return;
+    setPstat('Contacting PC...');
     conn = peer.connect(pcId, { reliable: true });
-    conn.on('open', () => setPstat('Connected to PC ✓  Sent: ' + sent));
-    conn.on('close', () => setPstat('Disconnected from PC.', true));
+    conn.on('open', () => { clearTimeout(connTimer); setPstat('Connected to PC ✓  Sent: ' + sent); });
+    conn.on('close', () => fail('Disconnected from PC.'));
+    conn.on('error', e => fail('Connection error: ' + (e && e.type || e)));
     conn.on('data', d => {
       if (d && d.t === 'ok') { sent++; setPstat('Connected to PC ✓  Sent: ' + sent); toast('Sent to PC ✓'); }
       else if (d && d.t === 'err') toast('PC did not receive it. Try again.');
     });
   });
-  peer.on('error', e => setPstat(e.type === 'peer-unavailable'
-    ? 'Could not find the PC. Make sure PC mode is open on the computer.' : 'Connection error: ' + e.type, true));
+  peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
+  peer.on('error', e => { clearTimeout(connTimer); fail(e.type === 'peer-unavailable'
+    ? 'Could not find the PC. Make sure PC mode is open on the computer.' : 'Connection error: ' + e.type); });
 }
 $('#preconn').onclick = connectPhone;
 async function sendImage(src) {
