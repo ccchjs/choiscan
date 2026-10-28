@@ -1,6 +1,7 @@
 const $ = s => document.querySelector(s);
 const V = { home: $('#home'), qrs: $('#qrs'), pc: $('#pc'), cam: $('#cam'), crop: $('#crop'), edit: $('#edit') };
 let stream, img, pts = [], raw, cur, mode = 'magic', pages = [];
+let adj = 50, adjDirty = false, pvFrame = 0, rawSmall = null;
 
 function toast(t) {
   const e = $('#toast'); e.textContent = t; e.classList.add('on');
@@ -16,21 +17,58 @@ function show(n) {
 }
 
 /* ---------- Camera ---------- */
-async function startCam() {
-  if (stream) return;
+let camBusy = null;
+async function openCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    const e = new Error('no-media'); e.name = 'NoMedia'; throw e;
+  }
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
+    return await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false
     });
-    $('#video').srcObject = stream;
-  } catch (e) { toast('Hindi mabuksan ang camera. Gamitin ang Upload o Phone camera.'); }
+  } catch (e) {
+    if (e.name === 'NotAllowedError' || e.name === 'SecurityError') throw e;
+    // fallback: walang special na constraints (para sa mga phone na ayaw sa facingMode/resolution)
+    return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  }
+}
+// iisa lang ang pagbubukas ng camera kahit ilang beses tawagin
+function ensureStream() {
+  if (stream) return Promise.resolve(stream);
+  if (!camBusy) camBusy = openCamera().then(s => (stream = s)).finally(() => { camBusy = null; });
+  return camBusy;
+}
+function camMsg(e) {
+  const n = e && e.name;
+  if (n === 'NoMedia') return window.isSecureContext
+    ? 'This browser does not support the camera. Open the link in Chrome or Safari.'
+    : 'The link must use https:// for the camera to work.';
+  if (n === 'NotAllowedError' || n === 'SecurityError')
+    return 'Camera access was denied. Tap "Open camera" and choose Allow. If it still fails, allow it in your browser Settings. If the link came from Messenger/FB/Viber, open it in Chrome or Safari.';
+  if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'No camera was found on this device.';
+  if (n === 'NotReadableError') return 'Another app is using the camera. Close it and try again.';
+  return 'Could not open the camera.';
+}
+function camFail(e) {
+  $('#camerr').textContent = camMsg(e) + ' You can also use "Phone camera" or "Upload" below.';
+  $('#camfix').hidden = false;
+}
+async function startCam() {
+  try { await ensureStream(); }
+  catch (e) { if (!V.cam.hidden) camFail(e); return; }
+  if (V.cam.hidden) { if (V.qrs.hidden) stopCam(); return; }
+  $('#camfix').hidden = true;
+  const v = $('#video');
+  v.srcObject = stream;               // laging i-attach, kahit galing sa QR scanner ang stream
+  v.play().catch(() => {});
 }
 function stopCam() {
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
 }
+$('#camopen').onclick = startCam;   // galing sa pindot ng user, kaya papayagan ng browser
 $('#shot').onclick = () => {
   const v = $('#video');
-  if (!v.videoWidth) return toast('Wala pang camera. Gamitin ang Upload.');
+  if (!v.videoWidth) return toast('Camera is not ready. Use Upload.');
   const c = document.createElement('canvas');
   c.width = v.videoWidth; c.height = v.videoHeight;
   c.getContext('2d').drawImage(v, 0, 0);
@@ -39,7 +77,7 @@ $('#shot').onclick = () => {
 async function fromFile(e) {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
-  try { handleImage(await createImageBitmap(f)); } catch (err) { toast('Hindi mabasa ang image na ito.'); }
+  try { handleImage(await createImageBitmap(f)); } catch (err) { toast('Could not read this image.'); }
 }
 $('#file').onchange = fromFile;
 $('#file2').onchange = fromFile;
@@ -137,10 +175,10 @@ function warp(im, p) {
   return out;
 }
 $('#apply').onclick = () => {
-  toast('Pinoproseso...');
+  toast('Processing...');
   setTimeout(() => {
     raw = warp(img, pts.map(p => [p[0] * img.width, p[1] * img.height]));
-    mode = 'magic'; show('edit'); render();
+    mode = 'magic'; adj = 50; show('edit'); render();
   }, 30);
 };
 
@@ -166,11 +204,10 @@ function sharpen(D, w, h) {
     for (let c = 0; c < 3; c++) { const j = i + c; d[j] = s[j] * 3 - .5 * (s[j - 4] + s[j + 4] + s[j - w * 4] + s[j + w * 4]); }
   }
 }
-function enhance(src, m) {
-  const w = src.width, h = src.height, o = document.createElement('canvas');
-  o.width = w; o.height = h;
-  const x = o.getContext('2d'); x.drawImage(src, 0, 0);
-  if (m === 'original') return o;
+function getBG(src) {
+  let B = bgCache.get(src);
+  if (B) return B;
+  const w = src.width, h = src.height;
   // estimate paper background: shrink, remove text (max filter), smooth, enlarge
   const sw = Math.max(8, Math.round(w / 8)), sh = Math.max(8, Math.round(h / 8));
   const s = document.createElement('canvas'); s.width = sw; s.height = sh;
@@ -185,31 +222,67 @@ function enhance(src, m) {
   sx.putImageData(sd, 0, 0);
   const bg = document.createElement('canvas'); bg.width = w; bg.height = h;
   const bx = bg.getContext('2d'); bx.imageSmoothingQuality = 'high'; bx.drawImage(s, 0, 0, w, h);
-  const D = x.getImageData(0, 0, w, h), d = D.data, B = bx.getImageData(0, 0, w, h).data;
-  const cl = v => v > 1 ? 1 : v < 0 ? 0 : v;
+  B = bx.getImageData(0, 0, w, h).data;
+  bgCache.set(src, B);   // i-cache para mabilis ang slider
+  return B;
+}
+// adj: 0-100 (50 = dating default). Magic/Gray = lakas ng contrast, B&W = lakas ng itim
+function enhance(src, m, adj = 50) {
+  const w = src.width, h = src.height, o = document.createElement('canvas');
+  o.width = w; o.height = h;
+  const x = o.getContext('2d'); x.drawImage(src, 0, 0);
+  if (m === 'original') return o;
+  const B = getBG(src);
+  const D = x.getImageData(0, 0, w, h), d = D.data;
+  const N = 1024, L = new Uint8ClampedArray(N + 1);
+  const gm = (m === 'magic' ? .8 : 1) + adj * .014, thr = .8 - adj * .0024;
+  for (let i = 0; i <= N; i++) { const t = i / N; L[i] = (m === 'bw' ? (t - thr) / .17 : Math.pow(t, gm)) * 255; }
   for (let i = 0; i < d.length; i += 4) {
     let r = d[i] / Math.max(B[i], 1), g = d[i + 1] / Math.max(B[i + 1], 1), b = d[i + 2] / Math.max(B[i + 2], 1);
     if (m !== 'magic') { r = g = b = .299 * r + .587 * g + .114 * b; }
-    if (m === 'bw') { r = g = b = cl((r - .68) / .17); }
-    else { const gm = m === 'magic' ? 1.5 : 1.7; r = Math.pow(cl(r), gm); g = Math.pow(cl(g), gm); b = Math.pow(cl(b), gm); }
-    d[i] = r * 255; d[i + 1] = g * 255; d[i + 2] = b * 255;
+    r = r > 1 ? 1 : r; g = g > 1 ? 1 : g; b = b > 1 ? 1 : b;
+    d[i] = L[(r * N + .5) | 0]; d[i + 1] = L[(g * N + .5) | 0]; d[i + 2] = L[(b * N + .5) | 0];
   }
   if (m !== 'bw') sharpen(D, w, h);
   x.putImageData(D, 0, 0);
   return o;
 }
+const bgCache = new WeakMap();
 
 /* ---------- Edit view ---------- */
 function render() {
-  cur = enhance(raw, mode);
+  cur = enhance(raw, mode, adj); adjDirty = false;
   const ec = $('#ec'); ec.width = cur.width; ec.height = cur.height;
   ec.getContext('2d').drawImage(cur, 0, 0);
   document.querySelectorAll('.modes button').forEach(b => b.classList.toggle('on', b.dataset.m === mode));
+  $('#adj').hidden = mode === 'original';
+  $('#adjr').value = adj; $('#adjv').textContent = adj;
   setExp();
 }
-document.querySelectorAll('.modes button').forEach(b => b.onclick = () => { mode = b.dataset.m; render(); });
+// mabilis na preview habang ginagalaw ang slider (maliit na kopya), buo pagkabitaw
+function preview() {
+  if (!raw) return;
+  if (!rawSmall || rawSmall.src !== raw) {
+    const k = Math.min(1, 800 / Math.max(raw.width, raw.height)), c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(raw.width * k)); c.height = Math.max(1, Math.round(raw.height * k));
+    c.getContext('2d').drawImage(raw, 0, 0, c.width, c.height);
+    rawSmall = { src: raw, c };
+  }
+  const p = enhance(rawSmall.c, mode, adj), ec = $('#ec');
+  ec.width = p.width; ec.height = p.height; ec.getContext('2d').drawImage(p, 0, 0);
+  adjDirty = true;
+}
+const flush = () => { if (adjDirty) render(); };
+$('#adjr').oninput = e => {
+  adj = +e.target.value; $('#adjv').textContent = adj;
+  cancelAnimationFrame(pvFrame); pvFrame = requestAnimationFrame(preview);
+};
+$('#adjr').onchange = () => { cancelAnimationFrame(pvFrame); render(); };
+$('#adjreset').onclick = () => { adj = 50; render(); };
+document.querySelectorAll('.modes button').forEach(b => b.onclick = () => { mode = b.dataset.m; adj = 50; render(); });
 $('#back').onclick = () => { show('crop'); drawCrop(); };
 function rot(dir) {
+  flush();
   const r = document.createElement('canvas'); r.width = raw.height; r.height = raw.width;
   const c = r.getContext('2d'); c.translate(r.width / 2, r.height / 2); c.rotate(dir * Math.PI / 2);
   c.drawImage(raw, -raw.width / 2, -raw.height / 2);
@@ -218,24 +291,56 @@ function rot(dir) {
 $('#rotl').onclick = () => rot(-1);
 $('#rotr').onclick = () => rot(1);
 $('#add').onclick = () => {
+  flush();
   pages.push({ c: cur });
   if (curItem) { inbox = inbox.filter(i => i !== curItem); curItem = null; renderInbox(); }
   updateTray(); show(base);
-  toast('Naidagdag ang page ' + pages.length + (role === 'pc' ? '. Piliin ang susunod na scan.' : '. Kuhanan ang susunod.'));
+  toast('Page added: ' + pages.length + (role === 'pc' ? '. Pick the next scan.' : '. Capture the next one.'));
 };
 
-/* ---------- Pages tray ---------- */
+/* ---------- Pages tray (may numero at pwedeng palit-palitan) ---------- */
+let dragI = -1, shownPages = 0;
+function movePage(i, j) {
+  if (i === j || j < 0 || j >= pages.length || i < 0) return;
+  const [p] = pages.splice(i, 1); pages.splice(j, 0, p);
+  updateTray();
+}
+function thumbOf(p) {
+  if (!p.t) {
+    const c = document.createElement('canvas'); c.height = 200; c.width = Math.max(1, Math.round(200 * p.c.width / p.c.height));
+    c.getContext('2d').drawImage(p.c, 0, 0, c.width, c.height);
+    p.t = c;
+  }
+  return p.t;
+}
 function updateTray() {
   const t = $('#thumbs'); t.innerHTML = '';
   pages.forEach((p, i) => {
-    const d = document.createElement('div'); d.className = 'th';
-    const c = document.createElement('canvas'); c.height = 112; c.width = Math.round(112 * p.c.width / p.c.height);
-    c.getContext('2d').drawImage(p.c, 0, 0, c.width, c.height);
-    const x = document.createElement('button'); x.textContent = '×'; x.setAttribute('aria-label', 'Alisin ang page ' + (i + 1));
+    const d = document.createElement('div'); d.className = 'th'; d.draggable = true;
+    d.title = 'Page ' + (i + 1) + ' (drag to move)';
+    const n = document.createElement('span'); n.className = 'num'; n.textContent = i + 1;
+    const x = document.createElement('button'); x.textContent = '×'; x.setAttribute('aria-label', 'Remove page ' + (i + 1));
     x.onclick = () => { pages.splice(i, 1); updateTray(); };
-    d.append(c, x); t.append(d);
+    const mv = document.createElement('div'); mv.className = 'mvs';
+    const a = document.createElement('button'); a.className = 'prev'; a.textContent = '◀'; a.disabled = i === 0;
+    a.setAttribute('aria-label', 'Move page ' + (i + 1) + ' earlier'); a.onclick = () => movePage(i, i - 1);
+    const b = document.createElement('button'); b.className = 'next'; b.textContent = '▶'; b.disabled = i === pages.length - 1;
+    b.setAttribute('aria-label', 'Move page ' + (i + 1) + ' later'); b.onclick = () => movePage(i, i + 1);
+    mv.append(a, b);
+    d.ondragstart = e => { dragI = i; d.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', String(i)); } catch (err) {} };
+    d.ondragend = () => { d.classList.remove('dragging'); document.querySelectorAll('.th.over').forEach(o => o.classList.remove('over')); };
+    d.ondragover = e => { e.preventDefault(); d.classList.add('over'); };
+    d.ondragleave = () => d.classList.remove('over');
+    d.ondrop = e => { e.preventDefault(); movePage(dragI, i); dragI = -1; };
+    d.append(thumbOf(p), n, x, mv); t.append(d);
   });
-  $('#count').textContent = pages.length ? pages.length + ' page' + (pages.length > 1 ? 's' : '') : '';
+  const label = pages.length ? pages.length + ' page' + (pages.length > 1 ? 's' : '') : '';
+  $('#count').textContent = label; $('#sidecount').textContent = label;
+  $('#sideempty').hidden = pages.length > 0;
+  if (pages.length > shownPages) {   // may bagong page: i-scroll papunta sa dulo
+    const s = $('#side'); t.scrollLeft = t.scrollWidth; s.scrollTop = s.scrollHeight;
+  }
+  shownPages = pages.length;
   setExp();
 }
 
@@ -256,7 +361,7 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 async function toPDF() {
-  if (!window.jspdf) return toast('Hindi pa na-load ang PDF library. Kailangan ng internet sa unang gamit.');
+  if (!window.jspdf) return toast('PDF library not loaded yet. Internet is needed on first use.');
   const { jsPDF } = window.jspdf; let doc;
   list().forEach((p, i) => {
     const o = p.c.width > p.c.height ? 'l' : 'p';
@@ -268,7 +373,7 @@ async function toPDF() {
   doc.save('scan.pdf');
 }
 async function toDocx() {
-  if (!window.docx) return toast('Hindi pa na-load ang Word library. Kailangan ng internet sa unang gamit.');
+  if (!window.docx) return toast('Word library not loaded yet. Internet is needed on first use.');
   const { Document, Packer, Paragraph, ImageRun } = window.docx, kids = [];
   for (const p of list()) {
     const b = await blobP(p.c, 'image/jpeg', .92);
@@ -286,14 +391,15 @@ async function toImages(type, ext) {
   }
 }
 document.querySelectorAll('.exports button').forEach(b => b.onclick = async () => {
-  toast('Ginagawa ang file...');
+  flush();
+  toast('Creating file...');
   try {
     const x = b.dataset.x;
     if (x === 'pdf') await toPDF();
     else if (x === 'docx') await toDocx();
     else if (x === 'png') await toImages('image/png', 'png');
     else await toImages('image/jpeg', 'jpg');
-  } catch (e) { console.error(e); toast('May error sa pag-export.'); }
+  } catch (e) { console.error(e); toast('Export error.'); }
 });
 
 /* ---------- Phone <-> PC link (WebRTC via PeerJS, walang sariling server) ---------- */
@@ -310,24 +416,24 @@ function handleImage(src) {
 
 /* PC side */
 function startPC(tries = 0) {
-  if (typeof Peer === 'undefined') return toast('Hindi na-load ang PeerJS. Kailangan ng internet.');
+  if (typeof Peer === 'undefined') return toast('PeerJS failed to load. Internet is required.');
   role = 'pc'; base = 'pc'; show('pc');
   let id = null;
   try { id = localStorage.getItem('scn-pcid'); } catch (e) {}
   if (!id || tries > 2) id = rid();
   try { localStorage.setItem('scn-pcid', id); } catch (e) {}
   if (peer) peer.destroy();
-  $('#pstatus').textContent = 'Nagkokonekta...';
+  $('#pstatus').textContent = 'Connecting...';
   peer = new Peer(id, { config: ICE });
-  peer.on('open', () => { drawQR(id); $('#pstatus').textContent = 'Naghihintay ng phone...'; });
+  peer.on('open', () => { drawQR(id); $('#pstatus').textContent = 'Waiting for phone...'; });
   peer.on('connection', c => {
-    c.on('open', () => { $('#pstatus').textContent = 'Nakakonekta ang phone ✓'; });
-    c.on('close', () => { $('#pstatus').textContent = 'Nadiskonekta ang phone. Naghihintay...'; });
+    c.on('open', () => { $('#pstatus').textContent = 'Phone connected ✓'; });
+    c.on('close', () => { $('#pstatus').textContent = 'Phone disconnected. Waiting...'; });
     c.on('data', d => onPhoneData(c, d));
   });
   peer.on('error', e => {
     if (e.type === 'unavailable-id') setTimeout(() => startPC(tries + 1), 2500);
-    else toast('Error sa koneksyon: ' + e.type);
+    else toast('Connection error: ' + e.type);
   });
   peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
 }
@@ -336,7 +442,7 @@ function drawQR(id) {
   $('#plink').textContent = url;
   const q = $('#qr'); q.innerHTML = '';
   if (typeof QRCode !== 'undefined') new QRCode(q, { text: url, width: 200, height: 200 });
-  else q.textContent = 'Hindi na-load ang QR. Gamitin ang link.';
+  else q.textContent = 'QR failed to load. Use the link.';
 }
 async function addInbox(blob) {
   const bmp = await createImageBitmap(blob);
@@ -347,23 +453,23 @@ async function onPhoneData(c, d) {
   if (!d || d.t !== 'img') return;
   try {
     await addInbox(new Blob([d.buf], { type: 'image/jpeg' }));
-    c.send({ t: 'ok' }); toast('May bagong scan mula sa phone');
+    c.send({ t: 'ok' }); toast('New scan from phone');
   } catch (e) { c.send({ t: 'err' }); }
 }
 function renderInbox() {
   const box = $('#inbox'); box.innerHTML = '';
   inbox.forEach(it => {
     const d = document.createElement('div'); d.className = 'th big';
-    const im = document.createElement('img'); im.src = it.url; im.alt = 'Scan na i-e-edit';
+    const im = document.createElement('img'); im.src = it.url; im.alt = 'Scan to edit';
     im.onclick = () => { curItem = it; setSource(it.bmp); };
-    const x = document.createElement('button'); x.textContent = '×'; x.setAttribute('aria-label', 'Alisin ang scan');
+    const x = document.createElement('button'); x.textContent = '×'; x.setAttribute('aria-label', 'Remove scan');
     x.onclick = () => { inbox = inbox.filter(i => i !== it); renderInbox(); };
     d.append(im, x); box.append(d);
   });
   $('#pempty').hidden = inbox.length > 0;
 }
 $('#pfile').onchange = async e => {
-  for (const f of e.target.files) { try { await addInbox(f); } catch (err) { toast('Hindi mabasa ang isang file.'); } }
+  for (const f of e.target.files) { try { await addInbox(f); } catch (err) { toast('Could not read a file.'); } }
   e.target.value = '';
 };
 $('#pback').onclick = () => { if (peer) { peer.destroy(); peer = null; } role = 'solo'; base = 'cam'; show('home'); };
@@ -376,30 +482,30 @@ function startPhone(id) {
   $('#pstat').hidden = false; show('cam'); connectPhone();
 }
 function connectPhone() {
-  if (typeof Peer === 'undefined') return setPstat('Hindi na-load ang PeerJS. Kailangan ng internet.', true);
+  if (typeof Peer === 'undefined') return setPstat('PeerJS failed to load. Internet is required.', true);
   if (peer) peer.destroy();
-  setPstat('Kumokonekta sa PC...');
+  setPstat('Connecting to PC...');
   peer = new Peer({ config: ICE });
   peer.on('open', () => {
     conn = peer.connect(pcId, { reliable: true });
-    conn.on('open', () => setPstat('Nakakonekta sa PC ✓  Naipadala: ' + sent));
-    conn.on('close', () => setPstat('Nadiskonekta sa PC.', true));
+    conn.on('open', () => setPstat('Connected to PC ✓  Sent: ' + sent));
+    conn.on('close', () => setPstat('Disconnected from PC.', true));
     conn.on('data', d => {
-      if (d && d.t === 'ok') { sent++; setPstat('Nakakonekta sa PC ✓  Naipadala: ' + sent); toast('Naipadala sa PC ✓'); }
-      else if (d && d.t === 'err') toast('Hindi natanggap ng PC. Ulitin.');
+      if (d && d.t === 'ok') { sent++; setPstat('Connected to PC ✓  Sent: ' + sent); toast('Sent to PC ✓'); }
+      else if (d && d.t === 'err') toast('PC did not receive it. Try again.');
     });
   });
   peer.on('error', e => setPstat(e.type === 'peer-unavailable'
-    ? 'Hindi mahanap ang PC. Siguraduhing bukas ang PC mode sa computer.' : 'Error sa koneksyon: ' + e.type, true));
+    ? 'Could not find the PC. Make sure PC mode is open on the computer.' : 'Connection error: ' + e.type, true));
 }
 $('#preconn').onclick = connectPhone;
 async function sendImage(src) {
-  if (!conn || !conn.open) return toast('Wala pang koneksyon sa PC.');
+  if (!conn || !conn.open) return toast('Not connected to the PC yet.');
   const k = Math.min(1, 3000 / Math.max(src.width, src.height));
   const c = document.createElement('canvas');
   c.width = Math.round(src.width * k); c.height = Math.round(src.height * k);
   c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
-  toast('Ipinapadala...');
+  toast('Sending...');
   const blob = await blobP(c, 'image/jpeg', .92);
   conn.send({ t: 'img', buf: await blob.arrayBuffer() });
 }
@@ -409,13 +515,12 @@ let qrRun = false, qrText = '';
 const qcv = document.createElement('canvas'), qcx = qcv.getContext('2d', { willReadFrequently: true });
 function setQR(t) { $('#qmsg').textContent = t; $('#qres').hidden = true; }
 async function startQR() {
-  setQR('Ituro ang camera sa QR code.');
-  if (!stream) {
-    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); }
-    catch (e) { return setQR('Hindi mabuksan ang camera. Gamitin ang "Mula sa larawan".'); }
-    if (V.qrs.hidden) { stopCam(); return; }
-  }
-  $('#qv').srcObject = stream; qrRun = true; qrLoop();
+  setQR('Point the camera at the QR code.');
+  try { await ensureStream(); }
+  catch (e) { return setQR(camMsg(e) + ' Use "From photo".'); }
+  if (V.qrs.hidden) { if (V.cam.hidden) stopCam(); return; }
+  const q = $('#qv'); q.srcObject = stream; q.play().catch(() => {});
+  if (!qrRun) { qrRun = true; qrLoop(); }
 }
 function qrLoop() {
   if (!qrRun || V.qrs.hidden) { qrRun = false; return; }
@@ -432,15 +537,15 @@ function qrLoop() {
 function onQR(t) {
   let u = null; try { u = new URL(t); } catch (e) {}
   const id = u && (u.origin + u.pathname === location.origin + location.pathname) ? u.searchParams.get('pc') : null;
-  if (id) { toast('Nakita ang PC link. Kumokonekta...'); return startPhone(id); }
-  qrText = t; $('#qtext').textContent = t; $('#qres').hidden = false; $('#qmsg').textContent = 'Nakita ang QR code:';
+  if (id) { toast('PC link found. Connecting...'); return startPhone(id); }
+  qrText = t; $('#qtext').textContent = t; $('#qres').hidden = false; $('#qmsg').textContent = 'QR code found:';
   const web = u && /^https?:$/.test(u.protocol);
   $('#qopen').hidden = !web; if (web) $('#qopen').href = u.href;
 }
 $('#goQR').onclick = () => show('qrs');
 $('#qback').onclick = () => show('home');
-$('#qagain').onclick = () => { if (stream) { setQR('Ituro ang camera sa QR code.'); qrRun = true; qrLoop(); } else startQR(); };
-$('#qcopy').onclick = () => navigator.clipboard.writeText(qrText).then(() => toast('Nakopya.')).catch(() => toast('Hindi makopya. I-select ang text.'));
+$('#qagain').onclick = () => { if (stream) { setQR('Point the camera at the QR code.'); qrRun = true; qrLoop(); } else startQR(); };
+$('#qcopy').onclick = () => navigator.clipboard.writeText(qrText).then(() => toast('Copied.')).catch(() => toast('Could not copy. Select the text instead.'));
 $('#qfile').onchange = async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
@@ -449,8 +554,8 @@ $('#qfile').onchange = async e => {
     qcv.width = Math.round(b.width * k); qcv.height = Math.round(b.height * k);
     qcx.drawImage(b, 0, 0, qcv.width, qcv.height);
     const r = typeof jsQR !== 'undefined' && jsQR(qcx.getImageData(0, 0, qcv.width, qcv.height).data, qcv.width, qcv.height);
-    r && r.data ? onQR(r.data) : toast('Walang nakitang QR code sa larawan.');
-  } catch (err) { toast('Hindi mabasa ang larawan.'); }
+    r && r.data ? onQR(r.data) : toast('No QR code found in the image.');
+  } catch (err) { toast('Could not read the photo.'); }
 };
 
 /* Home */
