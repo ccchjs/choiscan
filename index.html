@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fil">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -7,39 +7,39 @@
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#14213d">
 <link rel="icon" href="./icon.svg">
-<link rel="stylesheet" href="./style.css?v=7">
+<link rel="stylesheet" href="./style.css?v=9">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script defer src="./app.js?v=7"></script>
+<script defer src="./app.js?v=9"></script>
 </head>
 <body>
-<header><h1>Scanner <small id="ver">v7</small></h1><span id="count"></span></header>
+<header><h1>Scanner <small id="ver">v9</small></h1><span id="count"></span></header>
 <main>
   <section id="home" hidden>
-    <h2>Anong gagamitin mo?</h2>
-    <button id="goSolo" class="btn big">Mag-scan dito mismo</button>
-    <button id="goPC" class="btn big ghost">PC mode: tumanggap ng scan mula sa phone</button>
-    <button id="goQR" class="btn big ghost">I-scan ang QR code</button>
-    <p class="hint">Sa phone, pindutin ang "I-scan ang QR code" at ituro sa QR na lalabas sa PC mode para magkonekta.</p>
+    <h2>What would you like to do?</h2>
+    <button id="goSolo" class="btn big">Scan on this device</button>
+    <button id="goPC" class="btn big ghost">PC mode: receive scans from your phone</button>
+    <button id="goQR" class="btn big ghost">Scan a QR code</button>
+    <p class="hint">On your phone, tap "Scan a QR code" and point it at the QR shown in PC mode to connect.</p>
   </section>
 
   <section id="qrs" hidden>
     <video id="qv" autoplay playsinline muted></video>
-    <p id="qmsg" class="hint">Ituro ang camera sa QR code.</p>
+    <p id="qmsg" class="hint">Point the camera at the QR code.</p>
     <div id="qres" hidden>
       <p id="qtext" class="link"></p>
       <div class="bar">
-        <button id="qcopy" class="btn ghost">Kopyahin</button>
-        <a id="qopen" class="btn" target="_blank" rel="noopener" hidden>Buksan ang link</a>
-        <button id="qagain" class="btn ghost">Scan ulit</button>
+        <button id="qcopy" class="btn ghost">Copy</button>
+        <a id="qopen" class="btn" target="_blank" rel="noopener" hidden>Open link</a>
+        <button id="qagain" class="btn ghost">Scan again</button>
       </div>
     </div>
     <div class="bar">
-      <button id="qback" class="btn ghost">Balik</button>
-      <label class="btn ghost">Mula sa larawan<input id="qfile" type="file" accept="image/*" hidden></label>
+      <button id="qback" class="btn ghost">Back</button>
+      <label class="btn ghost">From photo<input id="qfile" type="file" accept="image/*" hidden></label>
     </div>
   </section>
 
@@ -47,39 +47,43 @@
     <div class="pcbox">
       <div id="qr"></div>
       <div>
-        <p id="pstatus">Nagkokonekta...</p>
-        <p class="hint">I-scan ang QR gamit ang camera ng phone, o buksan ang link na ito sa phone:</p>
+        <p id="pstatus">Connecting...</p>
+        <p class="hint">Scan the QR with your phone camera, or open this link on your phone:</p>
         <p id="plink" class="link"></p>
       </div>
     </div>
-    <h3>Mga dumating na scan</h3>
-    <p id="pempty" class="hint">Wala pa. Kumuha ng litrato sa phone. I-click ang scan dito para i-edit.</p>
+    <h3>Received scans</h3>
+    <p id="pempty" class="hint">Nothing yet. Take a photo on your phone. Click a scan here to edit it.</p>
     <div id="inbox"></div>
     <div class="bar">
-      <button id="pcam" class="btn">Camera ng PC</button>
-      <label class="btn ghost">Upload sa PC<input id="pfile" type="file" accept="image/*" multiple hidden></label>
-      <button id="pback" class="btn ghost">Balik</button>
+      <button id="pcam" class="btn">PC camera</button>
+      <label class="btn ghost">Upload on PC<input id="pfile" type="file" accept="image/*" multiple hidden></label>
+      <button id="pback" class="btn ghost">Back</button>
     </div>
   </section>
 
   <section id="cam" hidden>
     <p id="pstat" class="hint" hidden></p>
-    <button id="preconn" class="btn ghost" hidden>Ikonekta ulit</button>
-    <button id="cback" class="btn ghost">Balik</button>
+    <button id="preconn" class="btn ghost" hidden>Reconnect</button>
+    <button id="cback" class="btn ghost">Back</button>
+    <div id="camfix" class="camfix" hidden>
+      <p id="camerr" class="hint"></p>
+      <button id="camopen" class="btn">Open camera</button>
+    </div>
     <video id="video" autoplay playsinline muted></video>
     <div class="bar">
       <label class="btn ghost">Upload<input id="file" type="file" accept="image/*" hidden></label>
-      <button id="shot" class="shutter" aria-label="Kuhanan ang litrato"></button>
+      <button id="shot" class="shutter" aria-label="Take photo"></button>
       <label class="btn ghost">Phone camera<input id="file2" type="file" accept="image/*" capture="environment" hidden></label>
     </div>
   </section>
 
   <section id="crop" hidden>
     <canvas id="cc"></canvas>
-    <p class="hint">I-drag ang apat na sulok papunta sa gilid ng papel.</p>
+    <p class="hint">Drag the four corners to the edges of the paper.</p>
     <div class="bar">
-      <button id="retake" class="btn ghost">Ulitin</button>
-      <button id="apply" class="btn">I-crop</button>
+      <button id="retake" class="btn ghost">Retake</button>
+      <button id="apply" class="btn">Crop</button>
     </div>
   </section>
 
@@ -91,25 +95,37 @@
       <button data-m="bw">B&amp;W</button>
       <button data-m="original">Original</button>
     </div>
+    <div id="adj" class="adj">
+      <div class="adjtop"><label for="adjr">Adjust</label><span><output id="adjv">50</output> <button id="adjreset" class="btn ghost small" type="button">Reset</button></span></div>
+      <input id="adjr" type="range" min="0" max="100" value="50">
+      <div class="adjends"><span>Weak</span><span>Strong</span></div>
+    </div>
   </section>
 </main>
 
-<footer id="tray">
-  <div id="thumbs"></div>
-  <div class="bar" id="editbar" hidden>
-    <button id="back" class="btn ghost">Balik</button>
-    <button id="rotl" class="btn ghost" aria-label="I-rotate pakaliwa">&#8634;</button>
-    <button id="rotr" class="btn ghost" aria-label="I-rotate pakanan">&#8635;</button>
-    <button id="add" class="btn">+ Dagdag na page</button>
-  </div>
-  <div class="exports">
-    <button data-x="pdf" disabled>PDF</button>
-    <button data-x="docx" disabled>Word</button>
-    <button data-x="png" disabled>PNG</button>
-    <button data-x="jpg" disabled>JPG</button>
-  </div>
-  <p class="note">PDF at Word: isang file lahat ng page. PNG at JPG: isa-isa kada page.</p>
-</footer>
+<div id="dock">
+  <aside id="side">
+    <div class="sidehead"><strong>Pages</strong> <span id="sidecount"></span></div>
+    <p id="sideempty" class="hint">No pages yet. Tap "+ Add page".</p>
+    <div id="thumbs"></div>
+  </aside>
+  <footer id="tray">
+    <div class="bar" id="editbar" hidden>
+      <button id="back" class="btn ghost">Back</button>
+      <button id="rotl" class="btn ghost" aria-label="Rotate left">&#8634;</button>
+      <button id="rotr" class="btn ghost" aria-label="Rotate right">&#8635;</button>
+      <button id="add" class="btn">+ Add page</button>
+    </div>
+    <div class="exports">
+      <button data-x="pdf" disabled>PDF</button>
+      <button data-x="docx" disabled>Word</button>
+      <button data-x="png" disabled>PNG</button>
+      <button data-x="jpg" disabled>JPG</button>
+    </div>
+    <p class="note">PDF and Word: one file with all pages, in numbered order. Use the arrow buttons on a page or drag to reorder. PNG and JPG: one file per page.</p>
+  </footer>
+</div>
+<p id="credit">Made by <strong>CHOI</strong></p>
 <div id="toast" role="status"></div>
 </body>
 </html>
