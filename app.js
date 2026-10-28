@@ -370,7 +370,7 @@ async function toPDF() {
     const r = Math.min(W / p.c.width, H / p.c.height), w = p.c.width * r, h = p.c.height * r;
     doc.addImage(p.c.toDataURL('image/jpeg', .92), 'JPEG', (W - w) / 2, (H - h) / 2, w, h);
   });
-  doc.save('choi_scan.pdf');
+  doc.save('scan.pdf');
 }
 async function toDocx() {
   if (!window.docx) return toast('Word library not loaded yet. Internet is needed on first use.');
@@ -381,12 +381,12 @@ async function toDocx() {
     if (h > 900) { w = Math.round(w * 900 / h); h = 900; }
     kids.push(new Paragraph({ children: [new ImageRun({ data: await b.arrayBuffer(), transformation: { width: w, height: h } })] }));
   }
-  download(await Packer.toBlob(new Document({ sections: [{ children: kids }] })), 'choi_scan.docx');
+  download(await Packer.toBlob(new Document({ sections: [{ children: kids }] })), 'scan.docx');
 }
 async function toImages(type, ext) {
   const L = list();
   for (let i = 0; i < L.length; i++) {
-    download(await blobP(L[i].c, type, .92), 'choi_scan' + (L.length > 1 ? '_' + (i + 1) : '') + '.' + ext);
+    download(await blobP(L[i].c, type, .92), 'scan-' + (i + 1) + '.' + ext);
     await new Promise(r => setTimeout(r, 350));
   }
 }
@@ -481,34 +481,22 @@ function startPhone(id) {
   document.body.classList.add('phone');
   $('#pstat').hidden = false; show('cam'); connectPhone();
 }
-let connSeq = 0, connTimer = 0;
-async function connectPhone() {
-  const my = ++connSeq; clearTimeout(connTimer);
+function connectPhone() {
   if (typeof Peer === 'undefined') return setPstat('PeerJS failed to load. Internet is required.', true);
   if (peer) peer.destroy();
   setPstat('Connecting to PC...');
-  // Camera permission first: it lets the browser use the real local address, which helps same-Wi-Fi links.
-  try { await Promise.race([ensureStream().catch(() => {}), new Promise(r => setTimeout(r, 4000))]); } catch (e) {}
-  if (my !== connSeq) return;
-  const fail = t => { if (my === connSeq) setPstat(t, true); };
-  const giveUp = () => fail("Can't reach the PC. Make sure PC mode is open on the computer, then tap Reconnect. Same Wi-Fi works best.");
-  connTimer = setTimeout(() => { if (!conn || !conn.open) giveUp(); }, 20000);
   peer = new Peer({ config: ICE });
   peer.on('open', () => {
-    if (my !== connSeq) return;
-    setPstat('Contacting PC...');
     conn = peer.connect(pcId, { reliable: true });
-    conn.on('open', () => { clearTimeout(connTimer); setPstat('Connected to PC ✓  Sent: ' + sent); });
-    conn.on('close', () => fail('Disconnected from PC.'));
-    conn.on('error', e => fail('Connection error: ' + (e && e.type || e)));
+    conn.on('open', () => setPstat('Connected to PC ✓  Sent: ' + sent));
+    conn.on('close', () => setPstat('Disconnected from PC.', true));
     conn.on('data', d => {
       if (d && d.t === 'ok') { sent++; setPstat('Connected to PC ✓  Sent: ' + sent); toast('Sent to PC ✓'); }
       else if (d && d.t === 'err') toast('PC did not receive it. Try again.');
     });
   });
-  peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
-  peer.on('error', e => { clearTimeout(connTimer); fail(e.type === 'peer-unavailable'
-    ? 'Could not find the PC. Make sure PC mode is open on the computer.' : 'Connection error: ' + e.type); });
+  peer.on('error', e => setPstat(e.type === 'peer-unavailable'
+    ? 'Could not find the PC. Make sure PC mode is open on the computer.' : 'Connection error: ' + e.type, true));
 }
 $('#preconn').onclick = connectPhone;
 async function sendImage(src) {
