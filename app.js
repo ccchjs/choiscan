@@ -1,5 +1,5 @@
 const $ = s => document.querySelector(s);
-const V = { home: $('#home'), pc: $('#pc'), cam: $('#cam'), crop: $('#crop'), edit: $('#edit') };
+const V = { home: $('#home'), qrs: $('#qrs'), pc: $('#pc'), cam: $('#cam'), crop: $('#crop'), edit: $('#edit') };
 let stream, img, pts = [], raw, cur, mode = 'magic', pages = [];
 
 function toast(t) {
@@ -8,7 +8,7 @@ function toast(t) {
 }
 function show(n) {
   for (const k in V) V[k].hidden = k !== n;
-  n === 'cam' ? startCam() : stopCam();
+  n === 'cam' ? startCam() : n === 'qrs' ? startQR() : stopCam();
   $('#editbar').hidden = n !== 'edit';
   $('#cback').hidden = role === 'phone';
   if (typeof setExp === 'function') setExp();
@@ -402,6 +402,55 @@ async function sendImage(src) {
   const blob = await blobP(c, 'image/jpeg', .92);
   conn.send({ t: 'img', buf: await blob.arrayBuffer() });
 }
+
+/* ---------- QR scanner (jsQR) ---------- */
+let qrRun = false, qrText = '';
+const qcv = document.createElement('canvas'), qcx = qcv.getContext('2d', { willReadFrequently: true });
+function setQR(t) { $('#qmsg').textContent = t; $('#qres').hidden = true; }
+async function startQR() {
+  setQR('Ituro ang camera sa QR code.');
+  if (!stream) {
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); }
+    catch (e) { return setQR('Hindi mabuksan ang camera. Gamitin ang "Mula sa larawan".'); }
+    if (V.qrs.hidden) { stopCam(); return; }
+  }
+  $('#qv').srcObject = stream; qrRun = true; qrLoop();
+}
+function qrLoop() {
+  if (!qrRun || V.qrs.hidden) { qrRun = false; return; }
+  const v = $('#qv');
+  if (v.videoWidth && typeof jsQR !== 'undefined') {
+    const k = Math.min(1, 640 / v.videoWidth);
+    qcv.width = Math.round(v.videoWidth * k); qcv.height = Math.round(v.videoHeight * k);
+    qcx.drawImage(v, 0, 0, qcv.width, qcv.height);
+    const r = jsQR(qcx.getImageData(0, 0, qcv.width, qcv.height).data, qcv.width, qcv.height);
+    if (r && r.data) { qrRun = false; return onQR(r.data); }
+  }
+  requestAnimationFrame(qrLoop);
+}
+function onQR(t) {
+  let u = null; try { u = new URL(t); } catch (e) {}
+  const id = u && (u.origin + u.pathname === location.origin + location.pathname) ? u.searchParams.get('pc') : null;
+  if (id) { toast('Nakita ang PC link. Kumokonekta...'); return startPhone(id); }
+  qrText = t; $('#qtext').textContent = t; $('#qres').hidden = false; $('#qmsg').textContent = 'Nakita ang QR code:';
+  const web = u && /^https?:$/.test(u.protocol);
+  $('#qopen').hidden = !web; if (web) $('#qopen').href = u.href;
+}
+$('#goQR').onclick = () => show('qrs');
+$('#qback').onclick = () => show('home');
+$('#qagain').onclick = () => { if (stream) { setQR('Ituro ang camera sa QR code.'); qrRun = true; qrLoop(); } else startQR(); };
+$('#qcopy').onclick = () => navigator.clipboard.writeText(qrText).then(() => toast('Nakopya.')).catch(() => toast('Hindi makopya. I-select ang text.'));
+$('#qfile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try {
+    const b = await createImageBitmap(f), k = Math.min(1, 1200 / Math.max(b.width, b.height));
+    qcv.width = Math.round(b.width * k); qcv.height = Math.round(b.height * k);
+    qcx.drawImage(b, 0, 0, qcv.width, qcv.height);
+    const r = typeof jsQR !== 'undefined' && jsQR(qcx.getImageData(0, 0, qcv.width, qcv.height).data, qcv.width, qcv.height);
+    r && r.data ? onQR(r.data) : toast('Walang nakitang QR code sa larawan.');
+  } catch (err) { toast('Hindi mabasa ang larawan.'); }
+};
 
 /* Home */
 $('#pcam').onclick = () => { role = 'pc'; base = 'pc'; show('cam'); };
