@@ -10,6 +10,7 @@ function show(n) {
   for (const k in V) V[k].hidden = k !== n;
   n === 'cam' ? startCam() : stopCam();
   $('#editbar').hidden = n !== 'edit';
+  $('#cback').hidden = role === 'phone';
   if (typeof setExp === 'function') setExp();
 }
 
@@ -403,6 +404,8 @@ async function sendImage(src) {
 }
 
 /* Home */
+$('#pcam').onclick = () => { role = 'pc'; base = 'pc'; show('cam'); };
+$('#cback').onclick = () => show(base === 'pc' ? 'pc' : 'home');
 $('#goSolo').onclick = () => { role = 'solo'; base = 'cam'; show('cam'); };
 $('#goPC').onclick = () => startPC();
 function init() {
