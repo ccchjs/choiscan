@@ -7,16 +7,16 @@
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#14213d">
 <link rel="icon" href="./icon.svg">
-<link rel="stylesheet" href="./style.css?v=9">
+<link rel="stylesheet" href="./style.css?v=12">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script defer src="./app.js?v=9"></script>
+<script defer src="./app.js?v=12"></script>
 </head>
 <body>
-<header><h1>Scanner <small id="ver">v9</small></h1><span id="count"></span></header>
+<header><h1>Scanner <small id="ver">v12</small></h1><span id="count"></span></header>
 <main>
   <section id="home" hidden>
     <h2>What would you like to do?</h2>
@@ -24,6 +24,7 @@
     <button id="goPC" class="btn big ghost">PC mode: receive scans from your phone</button>
     <button id="goQR" class="btn big ghost">Scan a QR code</button>
     <p class="hint">On your phone, tap "Scan a QR code" and point it at the QR shown in PC mode to connect.</p>
+    <p class="wifi">&#128246; Note: your phone and PC must be connected to the <strong>same Wi-Fi</strong> to link. Turn off mobile data on the phone.</p>
   </section>
 
   <section id="qrs" hidden>
@@ -52,6 +53,7 @@
         <p id="plink" class="link"></p>
       </div>
     </div>
+    <p class="wifi">&#128246; Note: the phone must be on the <strong>same Wi-Fi</strong> as this PC, with mobile data turned off.</p>
     <h3>Received scans</h3>
     <p id="pempty" class="hint">Nothing yet. Take a photo on your phone. Click a scan here to edit it.</p>
     <div id="inbox"></div>
@@ -65,6 +67,7 @@
   <section id="cam" hidden>
     <p id="pstat" class="hint" hidden></p>
     <button id="preconn" class="btn ghost" hidden>Reconnect</button>
+    <p id="pwifi" class="wifi" hidden>&#128246; Make sure this phone is on the <strong>same Wi-Fi</strong> as the PC.</p>
     <button id="cback" class="btn ghost">Back</button>
     <div id="camfix" class="camfix" hidden>
       <p id="camerr" class="hint"></p>
