@@ -82,12 +82,128 @@ async function fromFile(e) {
 $('#file').onchange = fromFile;
 $('#file2').onchange = fromFile;
 
+
+/* ---------- Auto edge detection: finds the paper and places the 4 corners ---------- */
+function boxBlur(a, w, h, r) {
+  const t = new Float32Array(a.length), o = new Float32Array(a.length);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let s = 0, n = 0; for (let k = -r; k <= r; k++) { const xx = x + k; if (xx >= 0 && xx < w) { s += a[y * w + xx]; n++; } } t[y * w + x] = s / n;
+  }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let s = 0, n = 0; for (let k = -r; k <= r; k++) { const yy = y + k; if (yy >= 0 && yy < h) { s += t[yy * w + x]; n++; } } o[y * w + x] = s / n;
+  }
+  return o;
+}
+function hullOf(P) {
+  P.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], up = [];
+  for (const p of P) { while (lo.length > 1 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; while (up.length > 1 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+  lo.pop(); up.pop(); return lo.concat(up);
+}
+const polyArea = P => Math.abs(P.reduce((s, p, i) => { const q = P[(i + 1) % P.length]; return s + p[0] * q[1] - q[0] * p[1]; }, 0)) / 2;
+function autoCorners(src) {
+  const k = Math.min(1, 360 / Math.max(src.width, src.height));
+  const w = Math.max(16, Math.round(src.width * k)), h = Math.max(16, Math.round(src.height * k)), N = w * h;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d'); x.drawImage(src, 0, 0, w, h);
+  const d = x.getImageData(0, 0, w, h).data;
+  let g = new Float32Array(N);
+  for (let i = 0; i < N; i++) g[i] = .299 * d[i * 4] + .587 * d[i * 4 + 1] + .114 * d[i * 4 + 2];
+  g = boxBlur(boxBlur(g, w, h, 2), w, h, 2);
+  // Otsu threshold: separates the paper from the table
+  const hist = new Float64Array(256); for (let i = 0; i < N; i++) hist[Math.min(255, g[i] | 0)]++;
+  let sum = 0; for (let i = 0; i < 256; i++) sum += i * hist[i];
+  let wb = 0, sb = 0, bv = -1, thr = 128;
+  for (let t = 0; t < 256; t++) {
+    wb += hist[t]; if (!wb) continue; const wf = N - wb; if (!wf) break; sb += t * hist[t];
+    const mb = sb / wb, mf = (sum - sb) / wf, v = wb * wf * (mb - mf) * (mb - mf); if (v > bv) { bv = v; thr = t; }
+  }
+  let best = null;
+  for (const bright of [true, false]) {
+    const m = new Uint8Array(N); for (let i = 0; i < N; i++) m[i] = (g[i] > thr) === bright ? 1 : 0;
+    // largest connected blob
+    const seen = new Uint8Array(N), st = new Int32Array(N); let bs = -1, ba = 0;
+    for (let i = 0; i < N; i++) {
+      if (!m[i] || seen[i]) continue;
+      let sp = 0, a = 0; st[sp++] = i; seen[i] = 1;
+      while (sp) { const p = st[--sp]; a++; const px = p % w, py = (p / w) | 0;
+        if (px > 0 && m[p - 1] && !seen[p - 1]) { seen[p - 1] = 1; st[sp++] = p - 1; }
+        if (px < w - 1 && m[p + 1] && !seen[p + 1]) { seen[p + 1] = 1; st[sp++] = p + 1; }
+        if (py > 0 && m[p - w] && !seen[p - w]) { seen[p - w] = 1; st[sp++] = p - w; }
+        if (py < h - 1 && m[p + w] && !seen[p + w]) { seen[p + w] = 1; st[sp++] = p + w; } }
+      if (a > ba) { ba = a; bs = i; }
+    }
+    if (bs < 0 || ba < N * .06) continue;
+    // collect that blob's outline points
+    const mark = new Uint8Array(N), B = []; let sp = 0; st[sp++] = bs; mark[bs] = 1;
+    while (sp) { const p = st[--sp], px = p % w, py = (p / w) | 0; let edge = false;
+      for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const nx = px + dx, ny = py + dy; if (nx < 0 || ny < 0 || nx >= w || ny >= h) { edge = true; continue; }
+        const q = ny * w + nx; if (!m[q]) edge = true; else if (!mark[q]) { mark[q] = 1; st[sp++] = q; } }
+      if (edge) B.push([px, py]); }
+    let H = hullOf(B); if (H.length < 4) continue;
+    const ha = polyArea(H), fa = ha / N, sol = ba / ha;
+    if (fa < .08 || fa > .985 || sol < .7) continue;
+    // shrink the outline to its 4 corners (drop the least important point each time)
+    let Q = H.slice();
+    while (Q.length > 4) {
+      let bi = 0, bm = 1e18;
+      for (let i = 0; i < Q.length; i++) { const a = Q[(i + Q.length - 1) % Q.length], b = Q[i], c2 = Q[(i + 1) % Q.length];
+        const ar = Math.abs((b[0] - a[0]) * (c2[1] - a[1]) - (c2[0] - a[0]) * (b[1] - a[1])); if (ar < bm) { bm = ar; bi = i; } }
+      Q.splice(bi, 1);
+    }
+    if (polyArea(Q) / ha < .85) continue;
+    const dSeg = (p, a, b) => { const vx = b[0] - a[0], vy = b[1] - a[1], t = Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / (vx * vx + vy * vy || 1))); return Math.hypot(p[0] - a[0] - t * vx, p[1] - a[1] - t * vy); };
+    const Bo = B.filter(p => { let m2 = 1e9; for (let i = 0; i < H.length; i++) { const dd = dSeg(p, H[i], H[(i + 1) % H.length]); if (dd < m2) m2 = dd; } return m2 <= 2.5; });   // outer edge only (ignore text inside)
+    if (!best || sol > best.sol) best = { Q, sol, B: Bo };
+  }
+  if (!best) return null;
+  // refine: fit a straight line to each paper edge, then use where the lines cross as the corners
+  {
+    const Qs = best.Q, diag = Math.hypot(w, h), lines = [];
+    for (let i = 0; i < 4; i++) {
+      const a = Qs[i], b = Qs[(i + 1) % 4], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L;
+      let pts_ = best.B.filter(p => { const t = ((p[0] - a[0]) * ux + (p[1] - a[1]) * uy) / L, dd = Math.abs(-(p[0] - a[0]) * uy + (p[1] - a[1]) * ux); return t > .12 && t < .88 && dd < diag * .03; });
+      let ln = null;
+      for (let it = 0; it < 2 && pts_.length > 8; it++) {
+        const mx = pts_.reduce((s2, p) => s2 + p[0], 0) / pts_.length, my = pts_.reduce((s2, p) => s2 + p[1], 0) / pts_.length;
+        let sxx = 0, syy = 0, sxy = 0; pts_.forEach(p => { sxx += (p[0] - mx) ** 2; syy += (p[1] - my) ** 2; sxy += (p[0] - mx) * (p[1] - my); });
+        const an = .5 * Math.atan2(2 * sxy, sxx - syy); ln = [mx, my, Math.cos(an), Math.sin(an)];
+        if (it === 0) pts_ = pts_.filter(p => Math.abs(-(p[0] - mx) * ln[3] + (p[1] - my) * ln[2]) < Math.max(2, diag * .008));
+      }
+      lines.push(ln);
+    }
+    if (lines.every(Boolean)) {
+      const nq = [];
+      for (let i = 0; i < 4; i++) {
+        const A = lines[(i + 3) % 4], Bq = lines[i], den = A[2] * Bq[3] - A[3] * Bq[2];
+        if (Math.abs(den) < 1e-3) break;
+        const t = ((Bq[0] - A[0]) * Bq[3] - (Bq[1] - A[1]) * Bq[2]) / den, X = A[0] + t * A[2], Y = A[1] + t * A[3];
+        if (X < -w * .03 || X > w * 1.03 || Y < -h * .03 || Y > h * 1.03 || Math.hypot(X - Qs[i][0], Y - Qs[i][1]) > diag * .08) break;
+        nq.push([X, Y]);
+      }
+      if (nq.length === 4) best.Q = nq;
+    }
+  }
+  const cx0 = best.Q.reduce((s, p) => s + p[0], 0) / 4, cy0 = best.Q.reduce((s, p) => s + p[1], 0) / 4;
+  let Q = best.Q.map(p => [cx0 + (p[0] - cx0) * 1.012 + .5, cy0 + (p[1] - cy0) * 1.012 + .5]);   // tiny margin so edges are not cut
+  Q.sort((a, b) => Math.atan2(a[1] - cy0, a[0] - cx0) - Math.atan2(b[1] - cy0, b[0] - cx0));
+  let s0 = 0; Q.forEach((p, i) => { if (p[0] + p[1] < Q[s0][0] + Q[s0][1]) s0 = i; });
+  Q = Q.slice(s0).concat(Q.slice(0, s0));
+  return Q.map(p => [Math.min(1, Math.max(0, p[0] / w)), Math.min(1, Math.max(0, p[1] / h))]);
+}
+const DEF_PTS = () => [[.1, .1], [.9, .1], [.9, .9], [.1, .9]];
+
 function setSource(bmp) {
   const k = Math.min(1, 3000 / Math.max(bmp.width, bmp.height));
   img = document.createElement('canvas');
   img.width = Math.round(bmp.width * k); img.height = Math.round(bmp.height * k);
   img.getContext('2d').drawImage(bmp, 0, 0, img.width, img.height);
-  pts = [[.1, .1], [.9, .1], [.9, .9], [.1, .9]];
+  let a = null; try { a = autoCorners(img); } catch (e) {}
+  pts = a || DEF_PTS();
+  $('#crophint').textContent = a ? 'Edges found automatically. Drag the corners if needed, then tap Crop.' : 'Drag the four corners to the edges of the paper.';
   show('crop'); drawCrop();
 }
 
@@ -121,6 +237,15 @@ cc.onpointermove = e => {
 };
 cc.onpointerup = cc.onpointercancel = () => drag = -1;
 $('#retake').onclick = () => show(base);
+$('#auto').onclick = () => {
+  let a = null; try { a = autoCorners(img); } catch (e) {}
+  pts = a || DEF_PTS(); drawCrop();
+  toast(a ? 'Edges found. Drag the corners if needed.' : "Couldn't find the paper edges. Drag the corners by hand.");
+};
+// Close the editor and go back (stays connected to the phone; the scan stays in the list)
+function closeEditor() { curItem = null; show(base === 'pc' ? 'pc' : base); }
+$('#xcrop').onclick = $('#xedit').onclick = closeEditor;
+addEventListener('keydown', e => { if (e.key === 'Escape' && (!V.crop.hidden || !V.edit.hidden)) closeEditor(); });
 addEventListener('resize', () => { if (!V.crop.hidden) drawCrop(); });
 
 /* ---------- Perspective warp (pure JS) ---------- */
