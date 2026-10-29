@@ -1,4 +1,4 @@
-const C = 'scanner-v11';
+const C = 'scanner-v12';
 const A = ['./', './index.html', './style.css', './app.js', './manifest.json', './icon.svg'];
 self.addEventListener('install', e => e.waitUntil(caches.open(C).then(c => c.addAll(A)).then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(
