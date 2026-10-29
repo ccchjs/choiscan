@@ -33,9 +33,14 @@ async function openCamera() {
   }
 }
 // iisa lang ang pagbubukas ng camera kahit ilang beses tawagin
+const liveStream = () => !!stream && stream.getVideoTracks().some(t => t.readyState === 'live');
 function ensureStream() {
+  if (stream && !liveStream()) { try { stream.getTracks().forEach(t => t.stop()); } catch (e) {} stream = null; }   // camera was cut off (phone locked, other app): open a fresh one
   if (stream) return Promise.resolve(stream);
-  if (!camBusy) camBusy = openCamera().then(s => (stream = s)).finally(() => { camBusy = null; });
+  if (!camBusy) camBusy = openCamera().then(s => {
+    stream = s; s.getVideoTracks().forEach(t => t.addEventListener('ended', () => { if (stream === s) stream = null; }));
+    return s;
+  }).finally(() => { camBusy = null; });
   return camBusy;
 }
 function camMsg(e) {
@@ -566,7 +571,7 @@ function drawQR(id) {
   const url = location.origin + location.pathname + '?pc=' + id;
   $('#plink').textContent = url;
   const q = $('#qr'); q.innerHTML = '';
-  if (typeof QRCode !== 'undefined') new QRCode(q, { text: url, width: 200, height: 200 });
+  if (typeof QRCode !== 'undefined') new QRCode(q, { text: url, width: 280, height: 280, correctLevel: QRCode.CorrectLevel.L });
   else q.textContent = 'QR failed to load. Use the link.';
 }
 async function addInbox(blob) {
@@ -648,28 +653,46 @@ async function sendImage(src) {
 }
 
 /* ---------- QR scanner (jsQR) ---------- */
-let qrRun = false, qrText = '';
+let qrRun = false, qrText = '', qrGen = 0, qrTick = 0, qrLast = 0, qrDet = null;
 const qcv = document.createElement('canvas'), qcx = qcv.getContext('2d', { willReadFrequently: true });
 function setQR(t) { $('#qmsg').textContent = t; $('#qres').hidden = true; }
+function qrFail(msg) { $('#qerr').textContent = msg + ' Tap "Open camera", or use "From photo".'; $('#qfix').hidden = false; }
 async function startQR() {
-  setQR('Point the camera at the QR code.');
+  const my = ++qrGen; qrRun = false; $('#qfix').hidden = true;
+  setQR('Point the camera at the QR code. Fill the frame with it and hold steady.');
   try { await ensureStream(); }
-  catch (e) { return setQR(camMsg(e) + ' Use "From photo".'); }
+  catch (e) { if (my === qrGen) qrFail(camMsg(e)); return; }
+  if (my !== qrGen) return;
   if (V.qrs.hidden) { if (V.cam.hidden) stopCam(); return; }
-  const q = $('#qv'); q.srcObject = stream; q.play().catch(() => {});
-  if (!qrRun) { qrRun = true; qrLoop(); }
+  const q = $('#qv'); q.muted = true; q.srcObject = stream;
+  try { await q.play(); } catch (e) {}
+  if (my !== qrGen) return;
+  qrRun = true; qrLoop(my);
+  setTimeout(() => { if (my === qrGen && qrRun && !V.qrs.hidden && (!q.videoWidth || q.paused)) qrFail('The camera did not start.'); }, 3000);
 }
-function qrLoop() {
-  if (!qrRun || V.qrs.hidden) { qrRun = false; return; }
-  const v = $('#qv');
-  if (v.videoWidth && typeof jsQR !== 'undefined') {
-    const k = Math.min(1, 640 / v.videoWidth);
-    qcv.width = Math.round(v.videoWidth * k); qcv.height = Math.round(v.videoHeight * k);
-    qcx.drawImage(v, 0, 0, qcv.width, qcv.height);
-    const r = jsQR(qcx.getImageData(0, 0, qcv.width, qcv.height).data, qcv.width, qcv.height);
-    if (r && r.data) { qrRun = false; return onQR(r.data); }
+async function scanFrame(v, n) {
+  // 1) the phone's own QR reader, when the browser has one (fast and accurate)
+  if (qrDet === null) { try { qrDet = 'BarcodeDetector' in window ? new BarcodeDetector({ formats: ['qr_code'] }) : false; } catch (e) { qrDet = false; } }
+  if (qrDet) { try { const r = await qrDet.detect(v); if (r && r[0] && r[0].rawValue) return r[0].rawValue; } catch (e) { qrDet = false; } }
+  if (typeof jsQR === 'undefined') return null;
+  // 2) jsQR: alternate between the whole frame and a zoomed-in center, so small QR codes on a screen are found too
+  const vw = v.videoWidth, vh = v.videoHeight, zoom = n % 2 ? 1 : 2;
+  const sw = vw / zoom, sh = vh / zoom, sx = (vw - sw) / 2, sy = (vh - sh) / 2, k = Math.min(1, 1000 / sw);
+  qcv.width = Math.round(sw * k); qcv.height = Math.round(sh * k);
+  qcx.drawImage(v, sx, sy, sw, sh, 0, 0, qcv.width, qcv.height);
+  const r = jsQR(qcx.getImageData(0, 0, qcv.width, qcv.height).data, qcv.width, qcv.height, { inversionAttempts: n % 6 === 0 ? 'attemptBoth' : 'dontInvert' });
+  return r && r.data ? r.data : null;
+}
+async function qrLoop(my) {
+  if (my !== qrGen || !qrRun || V.qrs.hidden) { if (my === qrGen) qrRun = false; return; }
+  const v = $('#qv'), now = performance.now();
+  if (v.videoWidth && now - qrLast > 110) {
+    qrLast = now; qrTick++;
+    let found = null; try { found = await scanFrame(v, qrTick); } catch (e) {}
+    if (my !== qrGen) return;
+    if (found) { qrRun = false; return onQR(found); }
   }
-  requestAnimationFrame(qrLoop);
+  requestAnimationFrame(() => qrLoop(my));
 }
 function onQR(t) {
   let u = null; try { u = new URL(t); } catch (e) {}
@@ -681,7 +704,8 @@ function onQR(t) {
 }
 $('#goQR').onclick = () => show('qrs');
 $('#qback').onclick = () => show('home');
-$('#qagain').onclick = () => { if (stream) { setQR('Point the camera at the QR code.'); qrRun = true; qrLoop(); } else startQR(); };
+$('#qagain').onclick = () => startQR();
+$('#qopencam').onclick = () => { stopCam(); startQR(); };   // button press = allowed to ask for the camera again
 $('#qcopy').onclick = () => navigator.clipboard.writeText(qrText).then(() => toast('Copied.')).catch(() => toast('Could not copy. Select the text instead.'));
 $('#qfile').onchange = async e => {
   const f = e.target.files[0]; e.target.value = '';
