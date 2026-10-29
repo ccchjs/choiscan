@@ -31,7 +31,7 @@ button:focus-visible,label:focus-within{outline:3px solid var(--ac);outline-offs
 h2,h3{margin:8px 0 0;font-weight:600}
 .btn.big{width:100%;max-width:420px;padding:16px;font-size:17px}
 .pcbox{display:flex;gap:16px;align-items:center;flex-wrap:wrap;justify-content:center;background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px;width:100%}
-#qr{background:#fff;padding:8px;border:1px solid var(--line);border-radius:6px;min-width:216px;min-height:216px}
+#qr{background:#fff;padding:8px;border:1px solid var(--line);border-radius:6px;min-width:296px;min-height:296px}
 #pstatus{margin:0 0 6px;font-weight:600}
 .link{word-break:break-all;font-size:13px;margin:0;user-select:all}
 #inbox{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;width:100%}
@@ -100,3 +100,7 @@ a.btn{text-decoration:none;display:inline-block}
 .tut{width:100%;max-width:560px;display:flex;flex-direction:column;gap:6px}
 .tut h3{margin:0;font-size:16px}
 .tut video{width:100%;border-radius:10px;background:#000;display:block}
+
+.qwrap{position:relative;width:100%;max-width:520px;border-radius:10px;overflow:hidden;background:#000}
+.qwrap video{width:100%;display:block;max-width:none;border-radius:0}
+.qbox{position:absolute;inset:16% 22%;border:3px solid rgba(255,255,255,.9);border-radius:14px;pointer-events:none;box-shadow:0 0 0 999px rgba(0,0,0,.28)}
