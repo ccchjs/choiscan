@@ -52,10 +52,10 @@ a.btn{text-decoration:none;display:inline-block}
 #thumbs{display:flex;gap:12px;overflow-x:auto;overflow-y:hidden;max-width:100%;min-height:8px;align-items:center;padding:10px 6px 4px}
 #tray{padding:8px 12px;display:flex;flex-direction:column;gap:8px;align-items:center}
 .th{position:relative;flex:none}
-.th canvas{height:60px;width:auto;border:1px solid var(--line);border-radius:4px;display:block;background:#fff}
+.th canvas{height:68px;width:auto;border:1px solid var(--line);border-radius:4px;display:block;background:#fff}
 .th .num{position:absolute;left:-6px;top:-7px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--ac);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;z-index:1;pointer-events:none}
-.th .mvs{position:absolute;left:0;right:0;bottom:3px;display:flex;justify-content:space-between;padding:0 3px;pointer-events:none}
-.th .mvs button{position:static;pointer-events:auto;width:22px;height:22px;border-radius:50%;border:0;background:rgba(20,33,61,.88);color:#fff;font-size:10px;line-height:22px;padding:0;cursor:pointer}
+.th .mvs{position:static;display:flex;justify-content:center;gap:8px;margin-top:4px;padding:0}
+.th .mvs button{position:static;width:26px;height:26px;border-radius:50%;border:0;background:rgba(20,33,61,.88);color:#fff;font-size:11px;line-height:26px;padding:0;cursor:pointer}
 .th .mvs button:disabled{opacity:.25;cursor:default}
 .th.dragging{opacity:.35}
 .th.over canvas{outline:3px dashed var(--ac);outline-offset:2px}
@@ -81,7 +81,7 @@ a.btn{text-decoration:none;display:inline-block}
   #sideempty{display:block;margin-top:8px}
   #thumbs{flex-direction:column;align-items:stretch;overflow:visible;gap:16px;padding:14px 6px}
   .th canvas{width:100%;height:auto}
-  .th .mvs{left:auto;right:6px;bottom:6px;flex-direction:column;gap:4px;justify-content:flex-end}
+  .th .mvs{position:absolute;left:auto;right:6px;bottom:6px;margin:0;flex-direction:column;gap:4px;justify-content:flex-end}
   .th .mvs .prev{transform:rotate(90deg)}
   .th .mvs .next{transform:rotate(90deg)}
   #tray{grid-column:2;grid-row:3;background:#fff;border-top:1px solid var(--line)}
@@ -94,3 +94,9 @@ a.btn{text-decoration:none;display:inline-block}
 @media (min-width:900px){#credit{grid-column:1/-1;grid-row:4}}
 
 .wifi{margin:0;max-width:520px;font-size:14px;text-align:center;background:#fff7e0;border:1px solid #f0d58a;border-radius:8px;padding:8px 12px}
+
+.xclose{align-self:flex-end;background:#fff;color:#c62828;border:1.5px solid #c62828;border-radius:8px;padding:6px 14px;font-weight:700;font-size:15px;cursor:pointer}
+.xclose:hover{background:#c62828;color:#fff}
+.tut{width:100%;max-width:560px;display:flex;flex-direction:column;gap:6px}
+.tut h3{margin:0;font-size:16px}
+.tut video{width:100%;border-radius:10px;background:#000;display:block}
