@@ -7,18 +7,22 @@
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#14213d">
 <link rel="icon" href="./icon.svg">
-<link rel="stylesheet" href="./style.css?v=12">
+<link rel="stylesheet" href="./style.css?v=14">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script defer src="./app.js?v=12"></script>
+<script defer src="./app.js?v=14"></script>
 </head>
 <body>
-<header><h1>Scanner <small id="ver">v12</small></h1><span id="count"></span></header>
+<header><h1>Scanner <small id="ver">v14</small></h1><span id="count"></span></header>
 <main>
   <section id="home" hidden>
+    <div class="tut">
+      <h3>&#9654; How to use (2 min)</h3>
+      <video id="tut" controls preload="none" playsinline poster="tutorial-poster.jpg" src="tutorial.mp4"></video>
+    </div>
     <h2>What would you like to do?</h2>
     <button id="goSolo" class="btn big">Scan on this device</button>
     <button id="goPC" class="btn big ghost">PC mode: receive scans from your phone</button>
@@ -82,15 +86,18 @@
   </section>
 
   <section id="crop" hidden>
+    <button id="xcrop" class="xclose" aria-label="Close">&#10005; Close</button>
     <canvas id="cc"></canvas>
-    <p class="hint">Drag the four corners to the edges of the paper.</p>
+    <p id="crophint" class="hint">Drag the four corners to the edges of the paper.</p>
     <div class="bar">
       <button id="retake" class="btn ghost">Retake</button>
+      <button id="auto" class="btn ghost">Auto detect</button>
       <button id="apply" class="btn">Crop</button>
     </div>
   </section>
 
   <section id="edit" hidden>
+    <button id="xedit" class="xclose" aria-label="Close">&#10005; Close</button>
     <canvas id="ec"></canvas>
     <div class="modes">
       <button data-m="magic">Magic Color</button>
