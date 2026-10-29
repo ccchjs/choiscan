@@ -1,4 +1,4 @@
-const C = 'scanner-v9';
+const C = 'scanner-v11';
 const A = ['./', './index.html', './style.css', './app.js', './manifest.json', './icon.svg'];
 self.addEventListener('install', e => e.waitUntil(caches.open(C).then(c => c.addAll(A)).then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(
@@ -6,7 +6,7 @@ self.addEventListener('activate', e => e.waitUntil(
 ));
 // network-first: laging bagong code kapag may internet, cache lang kapag offline
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
+  if (e.request.method !== 'GET' || /\.mp4($|\?)/.test(e.request.url)) return;   // huwag i-cache ang video
   e.respondWith(fetch(e.request).then(res => {
     const cp = res.clone(); caches.open(C).then(c => c.put(e.request, cp)); return res;
   }).catch(() => caches.match(e.request)));
